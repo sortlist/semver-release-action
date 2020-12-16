@@ -13,15 +13,18 @@ const semver = __webpack_require__(5911)
 async function getMostRecentRepoTag() {
   console.log('Getting list of tags from repository')
   const token = core.getInput('github_token', { required: true })
+  const prefix = core.getInput('prefix', {required: false}) || ""
   const octokit = github.getOctokit(token)
 
   const { data: refs } = await octokit.git.listMatchingRefs({
     ...github.context.repo,
-    namespace: 'tags/'
+    namespace: `tags/${prefix}`
   })
 
+  const prx = new RegExp(`^refs/tags/${prefix}`);
   const versions = refs
-    .map(ref => semver.parse(ref.ref.replace(/^refs\/tags\//g, ''), { loose: true }))
+    .map(item => item.ref.replace(prx, ''))
+    .map(tag => semver.parse(tag, { loose: true }))
     .filter(version => version !== null)
     .sort(semver.rcompare)
 
@@ -47,13 +50,15 @@ async function getMostRecentBranchTag() {
     console.log(err)
     process.exit(exitCode)
   }
-  exitCode = await exec.exec('git', ['tag', '--no-column', '--merged'], options)
+  exitCode = await exec.exec('git', ['tag', '--no-column', '--merged', '--list', `${prefix}*`], options)
   if (exitCode != 0) {
     console.log(err)
     process.exit(exitCode)
   }
+  const prefix = core.getInput('prefix', {required: false}) || ""
+  const prx = new RegExp(`^${prefix}`,'g');
   const versions = output.split("\n")
-    .map(tag => semver.parse(tag, { loose: true }))
+    .map(tag => semver.parse(tag.replace(prx, ''), { loose: true }))
     .filter(version => version !== null)
     .sort(semver.rcompare)
 
